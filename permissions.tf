@@ -9,6 +9,10 @@ resource "kubernetes_role" "example" {
     resources  = ["pods"]
     verbs      = ["get", "list"]
   }
+
+  depends_on = [
+    kubernetes_namespace.example
+  ]
 }
 
 resource "kubernetes_role_binding" "example" {
@@ -28,25 +32,29 @@ resource "kubernetes_role_binding" "example" {
     name      = "example-user"
     api_group = "rbac.authorization.k8s.io"
   }
+
+  depends_on = [
+    kubernetes_role.example
+  ]
 }
 
 output "kubeconfig" {
   description = "Kubeconfig for the example user"
-  value = <<EOF
+  value       = <<EOF
 apiVersion: v1
 kind: Config
 clusters:
 - cluster:
-    certificate-authority-data: ${var.cluster_certificate_authority_data}
-    server: ${var.cluster_endpoint}
-  name: ${var.cluster_name}
+    certificate-authority-data: ${aws_eks_cluster.example.certificate_authority.0.data}
+    server: ${aws_eks_cluster.example.endpoint}
+  name: ${aws_eks_cluster.example.name}
 contexts:
 - context:
-    cluster: ${var.cluster_name}
+    cluster: ${aws_eks_cluster.example.name}
     user: example-user
     namespace: example-namespace
-  name: example-user@${var.cluster_name}
-current-context: example-user@${var.cluster_name}
+  name: example-user@${aws_eks_cluster.example.name}
+current-context: example-user@${aws_eks_cluster.example.name}
 users:
 - name: example-user
   user:
@@ -56,8 +64,8 @@ users:
       args:
         - "token"
         - "-i"
-        - "${var.cluster_name}"
+        - "${aws_eks_cluster.example.name}"
         - "-r"
-        - "${var.role_arn}"
+        - "${aws_iam_role.cluster.arn}"
 EOF
 }

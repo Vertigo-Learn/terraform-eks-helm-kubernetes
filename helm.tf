@@ -1,9 +1,3 @@
-provider "helm" {
- kubernetes {
-   config_path = "./kubeconfig.yaml"
- }
-}
-
 resource "helm_release" "nginx_ingress" {
   name       = "nginx-ingress"
   repository = "https://kubernetes.github.io/ingress-nginx"
@@ -19,4 +13,9 @@ resource "helm_release" "nginx_ingress" {
     name  = "controller.metrics.enabled"
     value = "false"
   }
+
+  depends_on = [
+    local_file.kubeconfig,
+    aws_eks_node_group.example
+  ]
 }

@@ -1,59 +1,54 @@
-provider "aws" {
-  region = "us-west-2"
-}
-
-data "aws_ami" "eks_worker" {
-  filter {
-    name   = "name"
-    values = ["amazon-eks-node-1.21-v*"]
-  }
-
-  most_recent = true
-  owners      = ["602401143452"] # Amazon EKS AMI account ID
-}
-
 resource "aws_eks_cluster" "example" {
-  name     = "example"
-  role_arn = aws_iam_role.example.arn
+  name     = var.cluster_name
+  role_arn = aws_iam_role.cluster.arn
 
   vpc_config {
-    subnet_ids = [aws_subnet.example.id]
+    subnet_ids = [aws_subnet.example_a.id, aws_subnet.example_b.id]
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.example-AmazonEKSClusterPolicy,
+    aws_subnet.example_a,
+    aws_subnet.example_b,
+    aws_iam_role_policy_attachment.AmazonEKSClusterPolicy,
+    aws_iam_role_policy_attachment.AmazonEKSVPCResourceController,
+    aws_iam_role_policy_attachment.ClusterIAMFullAccess,
   ]
 }
 
 resource "aws_eks_node_group" "example" {
-  cluster_name    = aws_eks_cluster.example.name
-  node_group_name = "example"
-  node_role_arn   = aws_iam_role.example.arn
-  subnet_ids      = [aws_subnet.example.id]
+  cluster_name    = var.cluster_name
+  node_group_name = "${var.cluster_name}-nodes"
+  node_role_arn   = aws_iam_role.workers.arn
+  subnet_ids      = [aws_subnet.example_a.id, aws_subnet.example_b.id]
 
   scaling_config {
-    desired_size = 1
-    max_size     = 1
-    min_size     = 1
+    desired_size = var.desired_size
+    max_size     = var.max_size
+    min_size     = var.min_size
   }
 
-  instance_types = ["t3.medium"]
-
-  remote_access {
-    ec2_ssh_key = "example"
-  }
+  instance_types = [var.instance_type]
 
   depends_on = [
-    aws_iam_role_policy_attachment.example-AmazonEKSWorkerNodePolicy,
+    aws_subnet.example_a,
+    aws_subnet.example_b,
+    aws_eks_cluster.example,
+    aws_iam_role_policy_attachment.AmazonEKSClusterPolicy,
+    aws_iam_role_policy_attachment.AmazonEKSVPCResourceController,
+    aws_iam_role_policy_attachment.WorkersIAMFullAccess,
+    aws_iam_role_policy_attachment.AmazonEKS_CNI_Policy
   ]
 }
 
-# Cria Kubeconfig
 resource "local_file" "kubeconfig" {
- content = templatefile("kubeconfig.tpl", {
-   endpoint                   = aws_eks_cluster.this.endpoint
-   certificate_authority_data = aws_eks_cluster.this.certificate_authority.0.data
-   cluster_name               = aws_eks_cluster.this.name
- })
- filename = "${path.module}/kubeconfig.yaml"
+  content = templatefile("kubeconfig.tpl", {
+    endpoint                   = aws_eks_cluster.example.endpoint
+    certificate_authority_data = aws_eks_cluster.example.certificate_authority.0.data
+    cluster_name               = aws_eks_cluster.example.name
+  })
+  filename = "${path.module}/kubeconfig.yaml"
+
+  depends_on = [
+    aws_eks_cluster.example
+  ]
 }
